@@ -1,17 +1,78 @@
-import os
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, Iterator, List, Tuple
+
 import duckdb
 import faiss
-import json
 import numpy as np
+from tqdm import tqdm
+
 from app.config import settings
 
-def main():
-    jobs_jsonl_path = settings.JOBS_JSONL_PATH
-    index_path = settings.index_path
+DIM = 1536
 
-    # Connect to DuckDB and create jobs table
-    conn = duckdb.connect('jobs.db')
-    conn.execute('''
+@dataclass(frozen=True)
+class JobRow:
+    row_index: int
+    job_id: str
+    title: str
+    company: str
+    location: str
+    apply_url: str
+    preview: str
+    vector: np.ndarray
+
+def _safe_get(dct: dict, *keys: str, default: str = "") -> str:
+    for key in keys:
+        value = dct.get(key)
+        if value:
+            return str(value)
+    return default
+
+def _parse_preview(job: dict) -> str:
+    raw = _safe_get(job, "job_information", default="")
+    return raw[: settings.preview_chars].replace("\n", " ").strip()
+
+def _merge_embedding(job: dict) -> np.ndarray:
+    v7 = job.get("v7_processed_job_data", {})
+    explicit = np.array(v7.get("embedding_explicit_vector", []), dtype=np.float32)
+    inferred = np.array(v7.get("embedding_inferred_vector", []), dtype=np.float32)
+    company = np.array(v7.get("embedding_company_vector", []), dtype=np.float32)
+    if explicit.size == DIM and inferred.size == DIM and company.size == DIM:
+        vector = 0.5 * explicit + 0.3 * inferred + 0.2 * company
+        return vector.astype(np.float32)
+    return np.zeros(DIM, dtype=np.float32)
+
+def stream_jobs(path: Path) -> Iterator[JobRow]:
+    with path.open("r", encoding="utf-8") as handle:
+        for row_index, line in enumerate(handle):
+            job = json.loads(line)
+            job_id = str(job.get("id", ""))
+            title = _safe_get(job, "title", default=_safe_get(job, "job_title"))
+            company = _safe_get(job, "company", default=_safe_get(job, "company_name"))
+            location = _safe_get(job, "location", default=_safe_get(job, "job_location"))
+            apply_url = _safe_get(job, "apply_url", default="")
+            preview = _parse_preview(job)
+            vector = _merge_embedding(job)
+            if not job_id:
+                continue
+            yield JobRow(
+                row_index=row_index,
+                job_id=job_id,
+                title=title,
+                company=company,
+                location=location,
+                apply_url=apply_url,
+                preview=preview,
+                vector=vector,
+            )
+
+def init_db(conn: duckdb.DuckDBPyConnection) -> None:
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS jobs (
             row_index INTEGER,
             id TEXT,
@@ -21,35 +82,46 @@ def main():
             apply_url TEXT,
             preview TEXT
         )
-    ''')
+        """
+    )
 
-    embeddings = []
-    job_records = []
+def batch(iterable: Iterable[JobRow], size: int) -> Iterator[List[JobRow]]:
+    bucket: List[JobRow] = []
+    for item in iterable:
+        bucket.append(item)
+        if len(bucket) >= size:
+            yield bucket
+            bucket = []
+    if bucket:
+        yield bucket
 
-    # Stream the jobs.jsonl file
-    with open(jobs_jsonl_path, 'r') as file:
-        for row_index, line in enumerate(file):
-            job = json.loads(line)
-            id = job['id']
-            title = job['title']
-            company = job['company']
-            location = job['location']
-            apply_url = job['apply_url']
-            preview = job['preview']
-            embedding = job.get('embedding', np.zeros(768))  # Example dimension for embeddings
-            
-            # Collect job metadata for batch insert
-            job_records.append((row_index, id, title, company, location, apply_url, preview))
-            embeddings.append(embedding)
+def build_index() -> None:
+    settings.ensure_dirs()
+    if not settings.jobs_jsonl_path or not settings.jobs_jsonl_path.exists():
+        raise FileNotFoundError("JOBS_JSONL_PATH must point to jobs.jsonl")
 
-    # Batch insert into DuckDB
-    conn.executemany('INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)', job_records)
+    conn = duckdb.connect(str(settings.db_path))
+    init_db(conn)
+    index = faiss.IndexFlatIP(DIM)
 
-    # Build FAISS index
-    embeddings = np.array(embeddings).astype('float32')  # Ensure correct dtype for FAISS
-    index = faiss.IndexFlatL2(embeddings.shape[1])  # L2 distance
-    index.add(embeddings)
-    faiss.write_index(index, index_path)
+    rows_inserted = 0
+    for chunk in tqdm(batch(stream_jobs(settings.jobs_jsonl_path), settings.batch_size), desc="Ingesting"): 
+        vectors = np.stack([row.vector for row in chunk])
+        faiss.normalize_L2(vectors)
+        index.add(vectors)
+        conn.executemany(
+            "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (row.row_index, row.job_id, row.title, row.company, row.location, row.apply_url, row.preview)
+                for row in chunk
+            ],
+        )
+        rows_inserted += len(chunk)
+
+    conn.commit()
+    conn.close()
+    faiss.write_index(index, str(settings.index_path))
+
 
 if __name__ == "__main__":
-    main()
+    build_index()
