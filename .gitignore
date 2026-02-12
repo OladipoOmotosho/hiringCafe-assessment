@@ -1,21 +1,30 @@
 # Dependencies
 node_modules/
 ui/node_modules/
+.pnpm-store/
 
 # Build output
 ui/dist/
 dist/
 build/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+htmlcov/
 
 # Environment variables
 .env
 .env.*
 !.env.example
+.envrc
 
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
+*$py.class
 *.egg-info/
 *.egg
 .eggs/
@@ -23,14 +32,36 @@ __pycache__/
 venv/
 .venv/
 env/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+pip-wheel-metadata/
+.ipynb_checkpoints/
 
 # Data artifacts (large files)
 data/
+/jobs.jsonl
+/jobs.json
+/jobs/
 *.duckdb
 *.duckdb.wal
+*.duckdb-shm
+*.duckdb-journal
 faiss.index
+*.index
 *.npy
 *.jsonl
+*.parquet
+*.feather
+*.sqlite
+*.sqlite3
 
 # IDE / Editor
 .vscode/
@@ -43,9 +74,11 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # OS
 Desktop.ini
@@ -55,3 +88,4 @@ ehthumbs.db
 .cache/
 .parcel-cache/
 *.tsbuildinfo
+.turbo/

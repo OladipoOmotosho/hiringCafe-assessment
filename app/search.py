@@ -90,11 +90,46 @@ def embed_query(query: str) -> Tuple[np.ndarray | None, int]:
 
 
 def keyword_score(text: str, keywords: Iterable[str]) -> float:
-    if not keywords:
+    keywords_list = list(keywords)
+    if not keywords_list:
         return 0.0
     text_lower = text.lower()
-    hits = sum(1 for k in keywords if k in text_lower)
-    return hits / max(len(list(keywords)), 1)
+    hits = sum(1 for k in keywords_list if k in text_lower)
+    return hits / max(len(keywords_list), 1)
+
+
+def merge_signals(base: SearchSignals, incoming: SearchSignals) -> SearchSignals:
+    return SearchSignals(
+        keywords=list(dict.fromkeys([*base.keywords, *incoming.keywords])),
+        remote=base.remote or incoming.remote,
+        seniority=incoming.seniority or base.seniority,
+        org_types=list(dict.fromkeys([*base.org_types, *incoming.org_types])),
+        location_terms=list(dict.fromkeys([*base.location_terms, *incoming.location_terms])),
+    )
+
+
+def keyword_candidates(signals: SearchSignals, limit: int) -> List[int]:
+    con = load_db()
+    where: List[str] = []
+    params: List[object] = []
+
+    if signals.keywords:
+        where.append("(" + " OR ".join(["lower(title || ' ' || preview) LIKE ?" for _ in signals.keywords]) + ")")
+        params.extend([f"%{k.lower()}%" for k in signals.keywords])
+    if signals.remote:
+        where.append("lower(title || ' ' || preview || ' ' || location) LIKE ?")
+        params.append("%remote%")
+    for org in signals.org_types:
+        where.append("lower(title || ' ' || preview || ' ' || company) LIKE ?")
+        params.append(f"%{org.lower()}%")
+    for loc in signals.location_terms:
+        where.append("lower(location) LIKE ?")
+        params.append(f"%{loc.lower()}%")
+
+    where_sql = " AND ".join(where) if where else "TRUE"
+    sql = f"select row_index from jobs where {where_sql} limit {int(limit)}"
+    rows = con.execute(sql, params).fetchall()
+    return [int(r[0]) for r in rows]
 
 
 def signal_boost(row: Dict, signals: SearchSignals) -> Tuple[float, List[str]]:
@@ -144,9 +179,7 @@ def search_jobs(query: str, top_k: int, context: SearchContext | None = None) ->
     started = time.time()
     signals = parse_signals(query)
     if context:
-        merged = context.signals.model_dump()
-        merged.update(signals.model_dump())
-        signals = SearchSignals(**merged)
+        signals = merge_signals(context.signals, signals)
 
     vector, tokens_used = embed_query(query)
     results: List[JobResult] = []
@@ -159,7 +192,8 @@ def search_jobs(query: str, top_k: int, context: SearchContext | None = None) ->
         candidates = fetch_rows(row_ids)
         score_map = {idx: float(dist) for idx, dist in zip(indices[0], distances[0])}
     else:
-        candidates = fetch_rows(list(range(0, top_k * 10)))
+        row_ids = keyword_candidates(signals, limit=min(top_k * 25, 1000))
+        candidates = fetch_rows(row_ids)
         score_map = {}
 
     for row in candidates:
