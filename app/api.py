@@ -35,11 +35,17 @@ def health() -> dict:
 def search(payload: SearchRequest) -> SearchResponse:
     if not payload.query.strip():
         raise HTTPException(status_code=400, detail="Query is required")
-    return search_jobs(payload.query, payload.top_k)
+    try:
+        return search_jobs(payload.query, payload.top_k)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/refine", response_model=SearchResponse)
 def refine(payload: RefineRequest) -> SearchResponse:
     if not payload.query.strip():
         raise HTTPException(status_code=400, detail="Query is required")
-    return refine_search(payload.query, payload.context, payload.top_k)
+    try:
+        return refine_search(payload.query, payload.context, payload.top_k)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
