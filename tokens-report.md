@@ -1,43 +1,44 @@
 # Tokens Report
 
+## Scope Note
+
+This project uses embeddings only for search relevance and ranking quality.
+
 ## Development Token Usage
 
-This implementation was developed as deterministic code changes in the repository.
-No runtime LLM generation is required by the application logic itself.
+- Development prompt/completion tokens were not instrumented in-repo.
+- The product runtime token usage below is fully measured by the app.
 
-- Estimated development prompt/completion token usage: not instrumented in-repo
-- Practical engineering assumption for this submission: no product-runtime dependency on development tokens
+## Runtime Token Usage (Measured)
 
-## Runtime Token Usage Per Query
+Source: `python -m app.eval` output (`data/eval-report.json`).
 
-The backend reports `tokens_used` in each `SearchResponse`.
+- Evaluated queries: 10
+- Total runtime tokens used: 57
+- Mean runtime tokens/query: 5.7
 
-### Current behavior
+Per-query examples from the latest run:
+
+- "data science jobs" → 3 tokens
+- "senior remote machine learning engineer" → 6 tokens
+- "neither executive nor vp data roles" → 11 tokens
+
+## How Runtime Tokens Are Counted
 
 - If `OPENAI_API_KEY` is configured:
-  - One embeddings request is made per user query/refinement (`text-embedding-3-small`).
-  - `tokens_used` reflects provider-reported usage for that embedding call.
+  - The engine uses embedding calls (`text-embedding-3-small`) for semantic retrieval.
+  - `tokens_used` in API responses is provider-reported usage for those embedding calls.
 - If `OPENAI_API_KEY` is not configured:
   - No external token-based model call is made.
   - `tokens_used = 0`.
 
-## Typical Consumption Pattern
+## Budget Check (<= $10 requirement)
 
-Given query text length `L`:
+- Pricing configured in app: `$0.00002` per 1K tokens.
+- Latest eval run estimated cost: `57 / 1000 * 0.00002 = $0.00000114`.
+- This is far below the `$10` cap.
 
-- Approximate token usage is proportional to `L` for embedding input.
-- Total query token cost is roughly one embedding call per turn.
+## Ongoing Tracking
 
-Refinement conversations consume tokens per turn in the same way:
-
-- Turn 1 search: 1 embedding call
-- Turn 2 refine: 1 embedding call
-- Turn 3 refine: 1 embedding call
-
-Total for a 3-turn refine flow: 3 embedding calls.
-
-## Recommendation for Production Tracking
-
-- Persist `tokens_used` per request in analytics logs.
-- Aggregate by endpoint (`/search` vs `/refine`) and by day.
-- Track p50/p95 tokens per query and cost-per-successful-session.
+- Token and estimated USD cost are persisted and exposed via `GET /metrics/tokens`.
+- This supports per-endpoint monitoring for `/search` and `/refine`.

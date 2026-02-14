@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchTokenMetrics, refineJobs, searchJobs } from "./api";
+import { fetchTokenMetrics, refineJobs, searchJobs, sendFeedback } from "./api";
+import infoIcon from "./assets/icons/info-icon.svg";
 
 function toPlainText(value) {
     if (!value) {
@@ -18,6 +19,8 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [metrics, setMetrics] = useState(null);
+    const [lastQuery, setLastQuery] = useState("");
+    const [lastContext, setLastContext] = useState(null);
 
     const canSubmit = useMemo(() => query.trim().length > 0 && !loading, [query, loading]);
 
@@ -47,6 +50,8 @@ export default function App() {
             setContext(response.context);
             setResults(response.results || []);
             setSuggestions(response.suggestions || []);
+            setLastQuery(response.query || "");
+            setLastContext(response.context || null);
             await refreshMetrics();
             setQuery("");
         } catch (submitError) {
@@ -67,6 +72,8 @@ export default function App() {
             setContext(response.context);
             setResults(response.results || []);
             setSuggestions(response.suggestions || []);
+            setLastQuery(response.query || "");
+            setLastContext(response.context || null);
             await refreshMetrics();
             setQuery("");
         } catch (submitError) {
@@ -179,36 +186,68 @@ export default function App() {
                 ) : null}
 
                 <div className="mt-6 grid gap-3">
-                    {results.map((job) => (
-                        <article
-                            key={job.id}
-                            className="bg-surface rounded-lg border border-neutral-200 p-4 shadow-sm"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <h3 className="font-semibold text-neutral-900">{job.title}</h3>
-                                    <p className="text-sm text-neutral-600 mt-1">
-                                        {job.company} · {job.location}
-                                    </p>
-                                </div>
-                                <span className="text-xs text-neutral-600">score {job.score}</span>
-                            </div>
-                            <p className="text-sm text-neutral-700 mt-3">{toPlainText(job.preview)}</p>
-                            {job.matched_signals?.length ? (
-                                <div className="mt-3 text-xs text-neutral-600">
-                                    matched: {job.matched_signals.join(", ")}
-                                </div>
-                            ) : null}
-                            <a
-                                href={job.apply_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-block mt-3 text-sm text-brand-700"
+                    {results.map((job, index) => {
+                        const rawScore = Number(job.score ?? 0);
+                        const relevancePercent = Math.max(0, rawScore * 100);
+                        const rank = index + 1;
+
+                        return (
+                            <article
+                                key={job.id}
+                                className="bg-surface rounded-lg border border-neutral-200 p-4 shadow-sm"
                             >
-                                Apply
-                            </a>
-                        </article>
-                    ))}
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 className="font-semibold text-neutral-900">{job.title}</h3>
+                                        <p className="text-sm text-neutral-600 mt-1">
+                                            {job.company} · {job.location}
+                                        </p>
+                                    </div>
+                                    <span
+                                        className="text-xs text-neutral-600 inline-flex items-center gap-1"
+                                        title={`Relative relevance score used to rank search results. Raw: ${rawScore.toFixed(4)}`}
+                                    >
+                                        Relevance {relevancePercent.toFixed(1)}%
+                                        <img
+                                            src={infoIcon}
+                                            alt="Relevance score info"
+                                            className="h-3.5 w-3.5"
+                                        />
+                                    </span>
+                                </div>
+                                <p className="text-sm text-neutral-700 mt-3">{toPlainText(job.preview)}</p>
+                                {job.matched_signals?.length ? (
+                                    <div className="mt-3 text-xs text-neutral-600">
+                                        matched: {job.matched_signals.join(", ")}
+                                    </div>
+                                ) : null}
+                                <a
+                                    href={job.apply_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-block mt-3 text-sm text-brand-700"
+                                    onClick={() => {
+                                        if (!lastQuery) {
+                                            return;
+                                        }
+                                        void sendFeedback({
+                                            event_type: "apply_click",
+                                            query: lastQuery,
+                                            job_id: job.id,
+                                            rank,
+                                            score: rawScore,
+                                            matched_signals: job.matched_signals || [],
+                                            score_breakdown: job.score_breakdown || null,
+                                            source: lastContext ? "refine" : "search",
+                                            context: lastContext,
+                                        });
+                                    }}
+                                >
+                                    Apply
+                                </a>
+                            </article>
+                        );
+                    })}
                 </div>
             </div>
         </div>

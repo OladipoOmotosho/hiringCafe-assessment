@@ -7,8 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.ingest import build_index
+from app.feedback import get_feedback_summary, record_feedback
 from app.metrics import get_token_metrics, record_token_usage
-from app.schema import RefineRequest, SearchRequest, SearchResponse
+from app.schema import FeedbackRequest, RefineRequest, SearchRequest, SearchResponse
 from app.search import refine_search, search_jobs
 
 logging.basicConfig(
@@ -32,7 +33,11 @@ app.add_middleware(
 def startup() -> None:
     """Build search artifacts at startup when required."""
     try:
-        build_index()
+        if settings.rebuild_index:
+            logger.warning(
+                "REBUILD_INDEX is set, but API startup reuses existing artifacts; use 'python -m app.ingest' to force rebuild"
+            )
+        build_index(force_rebuild=False)
         logger.info("Startup initialization completed")
     except FileNotFoundError:
         logger.warning("Skipping index build because JOBS_JSONL_PATH is not configured")
@@ -48,6 +53,19 @@ def health() -> dict:
 def token_metrics(recent_limit: int = 20) -> dict:
     """Return aggregate token/cost metrics and recent request records."""
     return get_token_metrics(recent_limit)
+
+
+@app.get("/feedback")
+def feedback_summary(recent_limit: int = 20) -> dict:
+    """Return a summary of recent feedback events."""
+    return get_feedback_summary(recent_limit)
+
+
+@app.post("/feedback")
+def feedback(payload: FeedbackRequest) -> dict:
+    """Record user feedback (click/apply) for offline tuning."""
+    entry = record_feedback(payload.model_dump())
+    return {"status": "ok", "event": entry}
 
 
 @app.post("/search", response_model=SearchResponse)
