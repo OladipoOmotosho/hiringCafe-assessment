@@ -1,84 +1,192 @@
-# AI Job Search – Implementation Plan
+# AI Job Search – Remediation Implementation Plan
 
-## Goals
-- Implement AI-powered job discovery with **search** and **refine** capabilities over a large JSONL dataset.
-- Provide a CLI demo (`python demo.py`) and a lightweight UI inspired by the Fake-Job-Posting-Tracker AI Discovery flow.
-- Keep the repository under 10 changed files, with each file under 350 LOC.
+## Objective
 
-## Constraints
-- Data file is 8.4GB (external): must be streamed, indexed, and cached.
-- Use Python + FAISS for vector search.
-- Avoid prop drilling in UI; use lightweight state container.
-- Apply DRY, separation of concerns, and reusable components.
+Close all gaps identified in `.agent/evaluation.md` with a **batch-by-batch rollout** that maximizes relevance quality, runtime efficiency, and low token cost.
 
-## Architecture Overview
+## Success Criteria
 
-### Backend (FastAPI)
-- `app/api.py` – FastAPI router with `/search` and `/refine` endpoints.
-- `app/ingest.py` – streaming JSONL ingestion into DuckDB + FAISS index build.
-- `app/search.py` – hybrid retrieval (keyword + vector) + ranking logic.
-- `app/schemas.py` – typed request/response models.
-- `app/config.py` – env config (dataset path, cache dir, model).
+- Search/refine quality improves for nuanced queries (mission-driven, abbreviation, negation, location intent).
+- Required submission artifacts are complete and measurable (tests, tokens report, README additions).
+- Token usage and USD cost are trackable in a visible medium (API + UI panel).
+- No regressions in existing `/search`, `/refine`, and `demo.py` flow.
 
-### Vector + Data Storage
-- **DuckDB** stores metadata (id, title, company, location, preview, embedding offset).
-- **FAISS** stores 3 embeddings (explicit, inferred, company) merged as a weighted vector.
-- Cache artifacts stored under `data/` (not committed):
-  - `jobs.duckdb`
-  - `faiss.index`
-  - `embeddings.npy`
+## Rollout Strategy (Batches)
 
-### Search Flow
-1. Parse query into signals (keywords, seniority, remote, org type, location).
-2. Create embedding for query (OpenAI `text-embedding-3-small`).
-3. FAISS search for top-k candidates.
-4. Re-rank using:
-   - Vector similarity (weighted)
-   - Keyword overlap
-   - Signal boosts (remote, org type, location, seniority)
-5. Return results + refinement suggestions.
+### Batch 1 — Reliability and Code Quality Foundation (P0)
 
-### Refine Flow
-- Accept context from previous search (history + signals + refinements).
-- Merge new query signals into context.
-- Re-run hybrid search with updated signals.
-- Append suggestions based on missing filters and low-signal coverage.
+**Goal**: Make ranking logic explicit, maintainable, and cheaper per repeated query.
 
-## Tasks
+**Scope**
 
-### 1) Backend Core
-- [ ] Add `app/config.py` for env configuration.
-- [ ] Add `app/ingest.py` streaming ingest + index build.
-- [ ] Add `app/search.py` with hybrid search + ranking.
-- [ ] Add `app/api.py` with `/search` and `/refine` routes.
-- [ ] Add `demo.py` CLI that starts server + runs example queries.
+- Replace ranking and boost magic numbers with named constants.
+- Add public-function docstrings across backend modules.
+- Add in-memory query embedding cache (LRU) to avoid duplicate embedding calls.
+- Add basic backend logging setup and structured logs around search/refine timing and token usage.
 
-### 2) Frontend UI (AI Discovery)
-- [ ] Add minimal Vite app under `ui/`.
-- [ ] Add AI search input component and results grid.
-- [ ] Add refinement suggestions + applied filters.
-- [ ] Add API client wrapper for `/search` and `/refine`.
+**Primary files**
 
-### 3) Documentation
-- [ ] Update `README.md` with setup + usage.
-- [ ] Add `tokens-report.md` with estimates and notes.
-- [ ] Provide example queries and refinement flow.
+- `app/search.py`
+- `app/api.py`
+- `app/config.py`
+- `app/ingest.py`
 
-## Deliverables Checklist
-- [ ] `python demo.py` starts API + prints 5 query results.
-- [ ] Refinement flow demonstrated in CLI output.
-- [ ] UI shows AI discovery search flow.
-- [ ] README describes approach, trade-offs, and limitations.
-- [ ] Tokens report included.
+**Acceptance criteria**
 
-## Risks & Mitigations
-- **Large dataset** → Stream ingestion + incremental indexing.
-- **Embedding cost** → Cache query embeddings and reuse signals.
-- **Speed** → FAISS + DuckDB + in-memory LRU caching.
-- **Ambiguity** → Heuristic signal extraction + optional LLM parsing.
+- No inline numeric ranking weights remain in search logic.
+- Repeated identical query does not trigger repeated embedding request.
+- Search/refine still return the same response schema.
 
-## Timeline (≤24h)
-1. Ingest/index + search backend (6–8h)
-2. Refinement logic + CLI demo (4–6h)
-3. UI & styling (4–6h)
-4. Docs & polish (2–4h)
+---
+
+### Batch 2 — Relevance and Query Understanding Upgrades (P1)
+
+**Goal**: Improve “results feel right” for ambiguous and real-world phrasing.
+
+**Scope**
+
+- Expand stopwords and normalize common abbreviations (`ml`, `ds`, `swe`, etc.).
+- Improve location parsing to reduce false positives from generic “in ...” clauses.
+- Add lightweight synonym and intent hints for mission-driven and social-good filtering.
+- Add optional negative intent handling (e.g., "not management") in scoring filters.
+
+**Primary files**
+
+- `app/search.py`
+- `demo.py` (add edge-case demo queries)
+
+**Acceptance criteria**
+
+- Mission-driven refinement shows visibly improved filtering.
+- Abbreviation queries produce relevant titles.
+- Negation-style query behavior is deterministic and tested.
+
+---
+
+### Batch 3 — Testing and Regression Safety Net (P1)
+
+**Goal**: Add enough tests to prevent ranking/intent regressions while staying lean.
+
+**Scope**
+
+- Add unit tests for `parse_signals`, `merge_signals`, `keyword_score`, `signal_boost`.
+- Add integration tests for `/search`, `/refine`, input validation, and error handling.
+- Add a compact end-to-end flow test for search → refine.
+
+**Primary files**
+
+- `tests/test_search.py`
+- `tests/test_api.py`
+- `tests/test_ingest.py` (small fixture-based validation)
+- `requirements.txt` (if test deps needed)
+
+**Acceptance criteria**
+
+- `pytest tests/ -v --tb=short` passes.
+- Core ranking and signal behavior is covered with deterministic assertions.
+
+---
+
+### Batch 4 — Scale and Safety Hardening (P2)
+
+**Goal**: Reduce query overhead and tighten data-access safety.
+
+**Scope**
+
+- Add DuckDB index on `row_index`.
+- Parameterize SQL row fetch paths where feasible.
+- Keep keyword fallback behavior, but tighten query generation and guardrails.
+
+**Primary files**
+
+- `app/ingest.py`
+- `app/search.py`
+
+**Acceptance criteria**
+
+- Metadata fetch path avoids avoidable full scans for common retrieval paths.
+- Query composition is safer and easier to audit.
+
+---
+
+### Batch 5 — Token + USD Cost Tracking Medium (Requested)
+
+**Goal**: Provide a practical way to track cumulative token usage and dollar cost.
+
+**Scope**
+
+- Add backend cost tracker that logs per-request:
+  - timestamp, endpoint, query hash, tokens_used, model, estimated_usd_cost.
+- Add aggregate endpoint, e.g. `GET /metrics/tokens` with totals and daily breakdown.
+- Add UI panel in existing React app showing:
+  - total tokens (session + lifetime file-backed),
+  - total estimated USD,
+  - last N requests.
+- Add env-configurable pricing constants to avoid hardcoding assumptions.
+
+**Primary files**
+
+- `app/metrics.py` (new)
+- `app/api.py`
+- `ui/src/App.jsx`
+- `ui/src/api.js`
+- `tokens-report.md` (replace template with measured runs)
+
+**Acceptance criteria**
+
+- UI displays live totals after each search/refine request.
+- `tokens-report.md` includes measured numbers from demo runs.
+- Estimated cost math is transparent and configurable.
+
+---
+
+### Batch 6 — Submission Readiness and Documentation (P1/P2)
+
+**Goal**: Finish all non-code deliverables to maximize evaluator confidence.
+
+**Scope**
+
+- Update README with:
+  - concrete “works well / tricky” query examples,
+  - total time spent,
+  - AI tools used during development.
+- Update `demo.py` output formatting for clarity in reviewer run-through.
+- Refresh `.agent/evaluation.md` to reflect closure status.
+
+**Primary files**
+
+- `README.md`
+- `demo.py`
+- `tokens-report.md`
+- `.agent/evaluation.md`
+
+**Acceptance criteria**
+
+- All required deliverables are complete and evidenced.
+- Repo is submission-ready with a single-command demo.
+
+## Order of Execution
+
+1. Batch 1
+2. Batch 2
+3. Batch 3
+4. Batch 4
+5. Batch 5
+6. Batch 6
+
+## Rollback / Risk Controls
+
+- Keep each batch in isolated commits.
+- Run tests and demo after every batch.
+- If relevance drops, revert only the affected batch and re-tune constants.
+
+## Estimated Effort (Focused)
+
+- Batch 1: 1.5–2.5h
+- Batch 2: 1.5–2.5h
+- Batch 3: 1.5–2.0h
+- Batch 4: 0.5–1.0h
+- Batch 5: 1.0–2.0h
+- Batch 6: 0.75–1.25h
+
+Total: ~6.75–11.25h, adjustable by depth of test suite and UI polish.

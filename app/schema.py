@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class SearchSignals(BaseModel):
     keywords: List[str] = Field(default_factory=list)
+    excluded_keywords: List[str] = Field(default_factory=list)
     remote: bool = False
     seniority: Optional[str] = None
     org_types: List[str] = Field(default_factory=list)

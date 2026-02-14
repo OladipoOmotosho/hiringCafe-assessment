@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 
 import httpx
 from dotenv import load_dotenv
@@ -17,17 +16,36 @@ load_dotenv()
 HOST = "127.0.0.1"
 PORT = 8000
 BASE_URL = f"http://{HOST}:{PORT}"
+DEFAULT_HEALTH_TIMEOUT_WITH_INDEX = 120
+DEFAULT_HEALTH_TIMEOUT_WITHOUT_INDEX = 0
 
 
-def wait_for_health(timeout_s: int = 120) -> None:
+def is_healthy(timeout_s: float = 2.0) -> bool:
+    try:
+        response = httpx.get(f"{BASE_URL}/health", timeout=timeout_s)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+def wait_for_health(
+    timeout_s: int = DEFAULT_HEALTH_TIMEOUT_WITH_INDEX,
+    server: subprocess.Popen[str] | None = None,
+) -> None:
+    if timeout_s <= 0:
+        while True:
+            if is_healthy(timeout_s=2.0):
+                return
+            if server is not None and server.poll() is not None:
+                raise RuntimeError("API server exited during startup before becoming healthy")
+            time.sleep(1)
+
     started = time.time()
     while time.time() - started < timeout_s:
-        try:
-            response = httpx.get(f"{BASE_URL}/health", timeout=2.0)
-            if response.status_code == 200:
-                return
-        except Exception:
-            pass
+        if is_healthy(timeout_s=2.0):
+            return
+        if server is not None and server.poll() is not None:
+            raise RuntimeError("API server exited during startup before becoming healthy")
         time.sleep(1)
     raise TimeoutError("API did not become healthy in time")
 
@@ -64,21 +82,33 @@ def run_demo() -> None:
             "PowerShell: $env:JOBS_JSONL_PATH='C:\\path\\to\\jobs.jsonl'"
         )
 
-    print("Starting API server...")
-    server = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--host", HOST, "--port", str(PORT)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
+    using_existing_server = is_healthy()
+    server: subprocess.Popen[str] | None = None
+
+    if using_existing_server:
+        print("Using existing healthy API server...")
+    else:
+        print("Starting API server...")
+        server = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "main:app", "--host", HOST, "--port", str(PORT)],
+            stdout=None,
+            stderr=None,
+        )
 
     try:
-        wait_for_health()
+        health_timeout = (
+            DEFAULT_HEALTH_TIMEOUT_WITH_INDEX
+            if has_index_artifacts
+            else int(os.getenv("DEMO_HEALTH_TIMEOUT_S", str(DEFAULT_HEALTH_TIMEOUT_WITHOUT_INDEX)))
+        )
+        wait_for_health(timeout_s=health_timeout, server=server)
         print("API is healthy. Running demo queries...")
 
         independent_queries = [
             {"query": "machine learning engineer jobs in california", "top_k": 10},
             {"query": "biostatistics scientist roles at hospitals", "top_k": 10},
+            {"query": "remote senior ml roles at mission-driven companies", "top_k": 10},
+            {"query": "data science jobs in new york not management", "top_k": 10},
         ]
 
         for payload in independent_queries:
@@ -113,11 +143,12 @@ def run_demo() -> None:
 
         print("\nDemo completed successfully.")
     finally:
-        server.terminate()
-        try:
-            server.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            server.kill()
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
 
 
 if __name__ == "__main__":

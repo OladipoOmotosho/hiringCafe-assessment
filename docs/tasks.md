@@ -1,29 +1,70 @@
-# AI Job Search Tasks
+# AI Job Search Remediation Tasks (Batch Rollout)
 
-## Backend Core
+This task list executes the gaps from `.agent/evaluation.md` in controlled batches.
 
-- [x] Add configuration module (`app/config.py`).
-- [x] Define data models (`app/schema.py`).
-- [x] Implement search logic (`app/search.py`).
-- [x] Implement ingestion + FAISS indexing (`app/ingest.py`).
-- [x] Add FastAPI endpoints (`app/api.py`).
-- [x] Add API entrypoint (e.g., `main.py`).
-- [x] Align search logic to ingestion schema and improve ranking.
+## Batch 1 — Reliability and Code Quality Foundation (P0)
 
-## Demo & Tooling
+- [x] Add named constants for ranking weights and boost values in `app/search.py`.
+- [x] Add public-function docstrings in `app/search.py`, `app/ingest.py`, `app/api.py`, `app/config.py`.
+- [x] Add query embedding LRU cache in `app/search.py`.
+- [x] Add logging setup and request-level logs (query, elapsed_ms, tokens_used).
+- [x] Verify no schema changes to `SearchResponse`.
+- [ ] Run `python demo.py` and confirm existing flow still works.
 
-- [x] Add Python dependencies (`requirements.txt`).
-- [x] Add CLI demo script (`demo.py`) to start API and run 5+ queries.
-- [x] Add tokens usage report (`tokens-report.md`).
+## Batch 2 — Relevance and Query Understanding (P1)
 
-## Frontend UI (AI Discovery)
+- [x] Expand stopword list with filler terms (find/show/me/some/please/need/etc).
+- [x] Add abbreviation expansion (`ml`, `ds`, `swe`, etc.) during normalization.
+- [x] Improve location extraction to reduce false positives.
+- [x] Add mission-driven/social-good intent hints in parsing/scoring.
+- [x] Add minimal negation handling for phrases like “not management”.
+- [x] Add at least 2 edge-case queries to `demo.py`.
+- [ ] Validate Batch 2 output quality from full `python demo.py` runtime.
 
-- [x] Add minimal Vite/React UI under `ui/`.
-- [x] Port AI discovery UI components (search input, suggestions, results grid).
-- [x] Add API client wrapper for `/search` and `/refine`.
+## Batch 3 — Tests and Regression Safety Net (P1)
 
-## Documentation
+- [x] Create `tests/` directory and baseline test config.
+- [x] Add unit tests for `parse_signals()`.
+- [x] Add unit tests for `merge_signals()`.
+- [x] Add unit tests for `keyword_score()`.
+- [x] Add unit tests for `signal_boost()`.
+- [x] Add integration tests for `/search` and `/refine` contracts.
+- [x] Add validation/error tests (empty query, malformed context).
+- [x] Run `pytest tests/ -v --tb=short` and fix failures.
 
-- [x] Add implementation plan (`docs/implementation-plan.md`).
-- [x] Update README with setup, usage, and approach.
-- [x] Add notes on trade-offs, limitations, and next steps.
+## Batch 4 — Scale and Safety Hardening (P2)
+
+- [x] Add DuckDB index on `jobs.row_index` in ingestion setup.
+- [x] Parameterize row fetch SQL paths where feasible.
+- [x] Re-check keyword fallback query safety and performance guardrails.
+- [ ] Validate end-to-end search latency remains acceptable.
+
+## Batch 5 — Token + USD Tracking Medium (Requested)
+
+- [x] Add backend metrics store for token and estimated USD per request.
+- [x] Add `GET /metrics/tokens` endpoint with totals and daily breakdown.
+- [x] Add pricing config/env variables for transparent cost math.
+- [x] Add UI panel in `ui/src/App.jsx` showing:
+  - [x] total tokens,
+  - [x] total estimated USD,
+  - [x] last N request entries.
+- [x] Add frontend API client method for token metrics in `ui/src/api.js`.
+- [x] Validate metrics update after every `/search` and `/refine` call.
+
+## Batch 6 — Submission Readiness (P1/P2)
+
+- [ ] Replace `tokens-report.md` estimates with measured numbers from real runs.
+- [ ] Update README with:
+  - [ ] concrete “works well” queries,
+  - [ ] concrete “tricky” queries,
+  - [ ] time spent,
+  - [ ] AI tools used.
+- [ ] Re-run `python demo.py` and ensure it still demonstrates 5+ queries including refine.
+- [ ] Re-check `.agent/evaluation.md` and mark addressed items.
+
+## Definition of Done (Global)
+
+- [ ] All Batch 1–6 checklist items completed.
+- [ ] Demo and tests both pass in current environment.
+- [ ] Token + USD tracking is visible via API and UI.
+- [ ] Deliverables in `description.md` are complete or explicitly marked optional.
