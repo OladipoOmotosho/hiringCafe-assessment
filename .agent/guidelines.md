@@ -406,7 +406,7 @@ Every non-trivial technical decision MUST be logged here or in the README. Forma
 - [ ] All Python files have type hints and docstrings on public functions
 - [ ] No dead code, no commented-out code, no print statements in library modules
 - [ ] Tests exist for search logic and pass: `pytest tests/ -v`
-- [ ] Frontend builds and displays results: `cd ui && npm run dev`
+- [ ] Frontend builds and displays results: `cd ui && yarn dev`
 - [ ] Total OpenAI spend ≤ $10
 
 ---

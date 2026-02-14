@@ -159,13 +159,15 @@ def batch(iterable: Iterable[JobRow], size: int) -> Iterator[List[JobRow]]:
         yield bucket
 
 
-def build_index() -> None:
+def build_index(force_rebuild: bool | None = None) -> None:
     """Build and persist DuckDB metadata and FAISS vector index artifacts."""
     settings.ensure_dirs()
     if settings.jobs_jsonl_path is None or not settings.jobs_jsonl_path.exists() or settings.jobs_jsonl_path.is_dir():
         raise FileNotFoundError("JOBS_JSONL_PATH must point to jobs.jsonl")
 
-    if not settings.rebuild_index and settings.db_path.exists() and settings.index_path.exists():
+    should_rebuild = settings.rebuild_index if force_rebuild is None else force_rebuild
+
+    if not should_rebuild and settings.db_path.exists() and settings.index_path.exists():
         logger.info("Using existing index artifacts db=%s index=%s", settings.db_path, settings.index_path)
         return
 

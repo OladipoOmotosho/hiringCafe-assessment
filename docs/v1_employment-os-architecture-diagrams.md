@@ -1,6 +1,7 @@
 # Employment Operating System — Phase 1 Architecture Diagrams
 
 ## 1) High-Level System Architecture (OS Model)
+
 ```mermaid
 flowchart LR
   subgraph Users
@@ -68,6 +69,7 @@ flowchart LR
 ---
 
 ## 2) Credential Pathway Engine (Core Differentiator)
+
 ```mermaid
 flowchart TD
   USER[User Credentials + Profile] --> MAP[NOC + Profession Mapping]
@@ -80,6 +82,7 @@ flowchart TD
 ---
 
 ## 3) Job Eligibility Graph (Now vs Later)
+
 ```mermaid
 flowchart LR
   PROFILE[User Skills + Credentials] --> ELIG[Eligibility Graph Builder]
@@ -95,6 +98,7 @@ flowchart LR
 ---
 
 ## 4) Verified Hiring Marketplace
+
 ```mermaid
 flowchart TD
   EMP[Employer] --> VERIFY[Verification Service]
@@ -110,17 +114,19 @@ flowchart TD
 ---
 
 ## 5) Outcome Accountability Engine
+
 ```mermaid
 flowchart TD
   USER[User Journey] --> EVENTS[Credential + Job Events]
   EVENTS --> OUTCOME[Outcome Analytics Service]
-  OUTCOME --> METRICS[Time-to-Interview, Placement Rate]
+  OUTCOME --> METRICS[Time-to-Match, Placement Rate]
   METRICS --> DASH[Agency & Admin Dashboards]
 ```
 
 ---
 
 ## 6) B2B Distribution Flywheel
+
 ```mermaid
 flowchart LR
   AGENCIES[Settlement Agencies] --> DASH[Agency Dashboard]

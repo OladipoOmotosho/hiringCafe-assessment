@@ -35,6 +35,7 @@ class Settings:
     preview_chars: int = int(os.getenv("PREVIEW_CHARS", "280"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     token_metrics_path: Path = _env_path("TOKEN_METRICS_PATH", "data/token-metrics.jsonl") or Path("data/token-metrics.jsonl")
+    feedback_events_path: Path = _env_path("FEEDBACK_EVENTS_PATH", "data/feedback-events.jsonl") or Path("data/feedback-events.jsonl")
     rebuild_index: bool = os.getenv("REBUILD_INDEX", "0") in {"1", "true", "TRUE", "yes", "YES"}
 
     def ensure_dirs(self) -> None:
@@ -43,6 +44,7 @@ class Settings:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
         self.token_metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        self.feedback_events_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()

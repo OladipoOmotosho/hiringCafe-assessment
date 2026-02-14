@@ -31,6 +31,14 @@ class RefineRequest(BaseModel):
     top_k: int = Field(default=20, ge=1, le=100)
 
 
+class ScoreBreakdown(BaseModel):
+    vector_score: float
+    keyword_score: float
+    signal_adjustment: float
+    rerank_adjustment: float = 0.0
+    final_score: float
+
+
 class JobResult(BaseModel):
     id: str
     title: str
@@ -40,6 +48,7 @@ class JobResult(BaseModel):
     score: float
     preview: str
     matched_signals: List[str] = Field(default_factory=list)
+    score_breakdown: Optional[ScoreBreakdown] = None
 
 
 class RefinementSuggestion(BaseModel):
@@ -54,3 +63,15 @@ class SearchResponse(BaseModel):
     suggestions: List[RefinementSuggestion]
     elapsed_ms: int
     tokens_used: int
+
+
+class FeedbackRequest(BaseModel):
+    event_type: str = Field(default="click", min_length=1, max_length=32)
+    query: str = Field(..., min_length=1, max_length=500)
+    job_id: str = Field(..., min_length=1, max_length=200)
+    rank: int = Field(..., ge=1, le=500)
+    score: float = Field(..., ge=0.0)
+    source: str = Field(default="search", min_length=1, max_length=32)
+    context: Optional[SearchContext] = None
+    matched_signals: List[str] = Field(default_factory=list)
+    score_breakdown: Optional[ScoreBreakdown] = None

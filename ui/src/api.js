@@ -31,3 +31,18 @@ export async function fetchTokenMetrics(recentLimit = 10) {
   }
   return response.json();
 }
+
+export async function sendFeedback(payload) {
+  const body = JSON.stringify(payload);
+  if (navigator.sendBeacon) {
+    const blob = new Blob([body], { type: "application/json" });
+    navigator.sendBeacon("/api/feedback", blob);
+    return;
+  }
+  await fetch("/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  });
+}
