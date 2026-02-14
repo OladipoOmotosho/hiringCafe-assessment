@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { refineJobs, searchJobs } from "./api";
+import { useEffect, useMemo, useState } from "react";
+import { fetchTokenMetrics, refineJobs, searchJobs } from "./api";
 
 function toPlainText(value) {
     if (!value) {
@@ -17,8 +17,22 @@ export default function App() {
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [metrics, setMetrics] = useState(null);
 
     const canSubmit = useMemo(() => query.trim().length > 0 && !loading, [query, loading]);
+
+    async function refreshMetrics() {
+        try {
+            const response = await fetchTokenMetrics(8);
+            setMetrics(response);
+        } catch {
+            setMetrics(null);
+        }
+    }
+
+    useEffect(() => {
+        refreshMetrics();
+    }, []);
 
     async function onSubmit() {
         if (!query.trim()) {
@@ -33,6 +47,7 @@ export default function App() {
             setContext(response.context);
             setResults(response.results || []);
             setSuggestions(response.suggestions || []);
+            await refreshMetrics();
             setQuery("");
         } catch (submitError) {
             setError(submitError?.message || "Request failed");
@@ -52,6 +67,7 @@ export default function App() {
             setContext(response.context);
             setResults(response.results || []);
             setSuggestions(response.suggestions || []);
+            await refreshMetrics();
             setQuery("");
         } catch (submitError) {
             setError(submitError?.message || "Request failed");
@@ -95,6 +111,53 @@ export default function App() {
                         </div>
                     ) : null}
                     {error ? <div className="mt-3 text-sm text-error">{error}</div> : null}
+                </div>
+
+                <div className="mt-4 bg-surface p-4 rounded-lg shadow-sm border border-neutral-200">
+                    <h2 className="text-sm font-medium text-neutral-800">Token & Cost Tracker</h2>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                        <div className="rounded-md border border-neutral-200 p-3 bg-neutral-0">
+                            <div className="text-neutral-600 text-xs">Total requests</div>
+                            <div className="text-neutral-900 font-semibold">
+                                {metrics?.totals?.requests ?? 0}
+                            </div>
+                        </div>
+                        <div className="rounded-md border border-neutral-200 p-3 bg-neutral-0">
+                            <div className="text-neutral-600 text-xs">Total tokens</div>
+                            <div className="text-neutral-900 font-semibold">
+                                {metrics?.totals?.tokens_used ?? 0}
+                            </div>
+                        </div>
+                        <div className="rounded-md border border-neutral-200 p-3 bg-neutral-0">
+                            <div className="text-neutral-600 text-xs">Estimated USD</div>
+                            <div className="text-neutral-900 font-semibold">
+                                ${(metrics?.totals?.estimated_usd_cost ?? 0).toFixed(6)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 text-xs text-neutral-600">
+                        Model: {metrics?.model ?? "-"} · Price per 1K tokens: ${metrics?.pricing?.embedding_cost_per_1k_tokens ?? 0}
+                    </div>
+
+                    {metrics?.recent_requests?.length ? (
+                        <div className="mt-3">
+                            <div className="text-xs text-neutral-600 mb-1">Recent requests</div>
+                            <div className="grid gap-2">
+                                {metrics.recent_requests.slice(0, 5).map((item) => (
+                                    <div
+                                        key={`${item.timestamp}-${item.query_hash}`}
+                                        className="rounded-md border border-neutral-200 p-2 text-xs bg-neutral-0 flex flex-wrap gap-x-3 gap-y-1"
+                                    >
+                                        <span className="text-neutral-700">{item.endpoint}</span>
+                                        <span className="text-neutral-600">tokens {item.tokens_used}</span>
+                                        <span className="text-neutral-600">usd ${Number(item.estimated_usd_cost || 0).toFixed(6)}</span>
+                                        <span className="text-neutral-600">{item.query_hash}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
 
                 {suggestions.length > 0 ? (

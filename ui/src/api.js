@@ -21,3 +21,13 @@ export async function refineJobs(query, context, topK = 20) {
   }
   return response.json();
 }
+
+export async function fetchTokenMetrics(recentLimit = 10) {
+  const response = await fetch(
+    `/api/metrics/tokens?recent_limit=${encodeURIComponent(recentLimit)}`,
+  );
+  if (!response.ok) {
+    throw new Error(`Metrics fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
