@@ -1,7 +1,5 @@
 # HiringCafe Assessment — AI Job Search + Refine
 
-Quick reviewer entry point: see `docs/submission-summary.md` for a one-page executive summary.
-
 ## Submission Deliverables (In Brief Order)
 
 1. **Working code**
