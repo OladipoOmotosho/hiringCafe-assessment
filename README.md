@@ -146,7 +146,7 @@ What it does:
 4. Launches the frontend UI (if `ui/node_modules` is present)
 5. Keeps both backend and frontend alive for interactive use
 
-After the automated queries finish, open **http://localhost:5173** in your browser to use the UI.
+After the automated queries finish, open **<http://localhost:5173>** in your browser to use the UI.
 Press `Ctrl+C` to stop all services.
 
 ## Lightweight Evaluation Harness
