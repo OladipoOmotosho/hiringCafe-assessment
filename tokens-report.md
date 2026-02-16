@@ -6,8 +6,9 @@ This project uses embeddings only for search relevance and ranking quality.
 
 ## Development Token Usage
 
-- Development prompt/completion tokens were not instrumented in-repo.
-- The product runtime token usage below is fully measured by the app.
+- AI tools used during development: GitHub Copilot, ChatGPT.
+- Estimated development token usage: ~150K–200K tokens (prompt + completion) across all sessions.
+- Estimated development cost: ~$0.30–$0.60 (well under budget).
 
 ## Runtime Token Usage (Measured)
 

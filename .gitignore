@@ -3,6 +3,11 @@ node_modules/
 ui/node_modules/
 .pnpm-store/
 
+# Agent / internal planning
+.agent/
+interviewSimulation*.md
+description.md
+
 # Build output
 ui/dist/
 dist/
