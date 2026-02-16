@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict
 
 import httpx
@@ -16,6 +18,7 @@ load_dotenv()
 HOST = "127.0.0.1"
 PORT = 8000
 BASE_URL = f"http://{HOST}:{PORT}"
+UI_DIR = Path(__file__).resolve().parent / "ui"
 DEFAULT_HEALTH_TIMEOUT_WITH_INDEX = 120
 DEFAULT_HEALTH_TIMEOUT_WITHOUT_INDEX = 0
 
@@ -142,13 +145,59 @@ def run_demo() -> None:
         print_results("REFINE TURN 3", turn3)
 
         print("\nDemo completed successfully.")
-    finally:
+    except Exception:
+        # On demo failure, still try to keep server/UI alive if launched
+        import traceback
+        traceback.print_exc()
         if server is not None:
             server.terminate()
-            try:
-                server.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                server.kill()
+        raise
+
+    # --- Launch frontend UI and keep everything running ---
+    frontend: subprocess.Popen[str] | None = None
+    yarn_bin = shutil.which("yarn")
+    npm_bin = shutil.which("npm")
+
+    if UI_DIR.exists() and (UI_DIR / "node_modules").exists() and (yarn_bin or npm_bin):
+        print("\n--- Starting frontend UI ---")
+        run_cmd = [yarn_bin or npm_bin, "dev"]  # type: ignore[list-item]
+        frontend = subprocess.Popen(run_cmd, cwd=str(UI_DIR), stdout=None, stderr=None)
+        time.sleep(3)  # give Vite a moment
+        print(f"Frontend running at http://localhost:5173")
+    elif UI_DIR.exists():
+        print("\nNote: Frontend UI dependencies not installed. Run 'cd ui && yarn' to enable the UI.")
+
+    if server is not None or frontend is not None:
+        print(f"\nBackend API: {BASE_URL}")
+        if frontend is not None:
+            print(f"Frontend UI: http://localhost:5173")
+        print("Press Ctrl+C to stop all services.\n")
+        try:
+            while True:
+                if server is not None and server.poll() is not None:
+                    print("Backend server exited unexpectedly.")
+                    break
+                if frontend is not None and frontend.poll() is not None:
+                    print("Frontend server exited unexpectedly.")
+                    break
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+        finally:
+            if frontend is not None:
+                frontend.terminate()
+                try:
+                    frontend.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    frontend.kill()
+            if server is not None:
+                server.terminate()
+                try:
+                    server.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+    else:
+        print(f"\nUsed existing server at {BASE_URL}. Start frontend separately with: cd ui && yarn dev")
 
 
 if __name__ == "__main__":

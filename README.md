@@ -5,7 +5,7 @@
 1. **Working code**
 
 - Search + Refine implemented (API in `main.py` / `app/`)
-- Runnable demo with multi-turn refinement: `python demo.py`
+- Single-command demo: `python demo.py` (starts backend + runs queries + launches frontend UI)
 
 1. **README explanation**
 
@@ -132,7 +132,7 @@ Endpoints:
 - `POST /feedback`
 - `GET /feedback`
 
-## Runnable Demo (5+ queries including refine)
+## Runnable Demo (single command)
 
 ```bash
 python demo.py
@@ -140,10 +140,14 @@ python demo.py
 
 What it does:
 
-- starts API server
-- runs multiple search queries
-- runs a 3-turn refine conversation
-- prints top ranked jobs + suggestions
+1. Starts the backend API server (or reuses a running one)
+2. Runs 4 independent search queries + a 3-turn refine conversation
+3. Prints ranked results, matched signals, and refinement suggestions
+4. Launches the frontend UI (if `ui/node_modules` is present)
+5. Keeps both backend and frontend alive for interactive use
+
+After the automated queries finish, open **http://localhost:5173** in your browser to use the UI.
+Press `Ctrl+C` to stop all services.
 
 ## Lightweight Evaluation Harness
 
@@ -171,10 +175,12 @@ What it does:
 
 ## Frontend UI
 
+The frontend is launched automatically by `python demo.py`. To run it manually:
+
 ```bash
 cd ui
-yarn
-yarn dev
+yarn          # install deps (first time only)
+yarn dev      # start Vite dev server on http://localhost:5173
 ```
 
 The UI calls:
@@ -195,7 +201,7 @@ via Vite proxy to `http://127.0.0.1:8000`.
 
 **Works well:**
 
-- **Broad role retrieval** — queries like `"remote software engineer"` return relevant results fast (e.g., *Staff Software Engineer, Ads – Quora (Remote)* at 0.86, with signals correctly detecting `remote`).
+- **Broad role retrieval** — queries like `"remote software engineer"` return relevant results fast (e.g., _Staff Software Engineer, Ads – Quora (Remote)_ at 0.86, with signals correctly detecting `remote`).
 - **Iterative multi-turn refinement** — starting with `"software engineer"`, then refining to `"remote only"`, then `"senior level, not management"` progressively narrows the result set; exclusion signals like `not management` are respected via negation parsing.
 - **Seniority + role queries** — `"senior product manager"` returns highly relevant results (0.95+ scores) with `seniority=senior` correctly extracted.
 - **Keyword negation** — `"machine learning engineer but not management"` excludes management-titled results and deprioritizes managerial content (negation penalty applied).
