@@ -95,8 +95,16 @@ MISSION_QUERY_TERMS = [
     "social impact",
     "public benefit",
     "purpose driven",
+    "purpose-driven",
+    "do good",
+    "make a difference",
+    "give back",
+    "help people",
+    "help communities",
+    "socially responsible",
 ]
 
+# --- content-level terms matched against title/preview/company ---
 MISSION_MATCH_TERMS = [
     "social good",
     "mission",
@@ -109,6 +117,45 @@ MISSION_MATCH_TERMS = [
     "nonprofit",
     "non-profit",
     "ngo",
+    "humanitarian",
+    "advocacy",
+    "civic",
+    "social services",
+    "social work",
+    "human services",
+    "public health",
+    "public interest",
+    "philanthropy",
+    "charitable",
+    "underserved",
+    "vulnerable populations",
+    "workforce development",
+]
+
+# --- known mission-driven organization name fragments (from dataset) ---
+MISSION_ORG_PATTERNS = [
+    "volunteers of america",
+    "catholic charities",
+    "salvation army",
+    "goodwill",
+    "ymca",
+    "ywca",
+    "boys & girls club",
+    "boys and girls club",
+    "united way",
+    "habitat for humanity",
+    "planned parenthood",
+    "americorps",
+    "sierra club",
+    "red cross",
+    "peace corps",
+    "teach for america",
+    "surfrider foundation",
+    "mellon foundation",
+    "community health",
+    "community legal aid",
+    "community partners",
+    "community care",
 ]
 
 NEGATION_TERMS = {
@@ -385,10 +432,11 @@ def keyword_candidates(signals: SearchSignals, limit: int) -> List[int]:
         params.append("%remote%")
     for org in signals.org_types:
         if org == "mission-driven":
+            all_mission = MISSION_MATCH_TERMS + MISSION_ORG_PATTERNS
             where.append(
-                "(" + " OR ".join(["lower(title || ' ' || preview || ' ' || company) LIKE ?" for _ in MISSION_MATCH_TERMS]) + ")"
+                "(" + " OR ".join(["lower(title || ' ' || preview || ' ' || company) LIKE ?" for _ in all_mission]) + ")"
             )
-            params.extend([f"%{term}%" for term in MISSION_MATCH_TERMS])
+            params.extend([f"%{term}%" for term in all_mission])
             continue
         where.append("lower(title || ' ' || preview || ' ' || company) LIKE ?")
         params.append(f"%{org.lower()}%")
@@ -422,7 +470,9 @@ def signal_boost(row: Dict[str, Any], signals: SearchSignals) -> Tuple[float, Li
 
     for org in signals.org_types:
         if org == "mission-driven":
-            if any(term in haystack for term in MISSION_MATCH_TERMS):
+            if any(term in haystack for term in MISSION_MATCH_TERMS) or any(
+                pat in haystack for pat in MISSION_ORG_PATTERNS
+            ):
                 boost += MISSION_BOOST
                 matched.append("mission-driven")
             continue

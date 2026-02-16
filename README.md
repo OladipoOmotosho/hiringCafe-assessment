@@ -188,21 +188,27 @@ via Vite proxy to `http://127.0.0.1:8000`.
 
 - Query embeddings require OpenAI API for best semantic quality.
 - Current signal extraction is heuristic (regex/token based), not full LLM intent parsing.
-- Company mission/social-good filtering is keyword based in this version.
+- Company mission/social-good filtering uses expanded keyword + known-org pattern matching (40+ terms, 20+ org patterns mined from dataset) since the data lacks structured mission/industry tags.
 - Dataset schema can be inconsistent; ingestion uses resilient fallbacks for title/company/location.
 
 ## What Works Well / What’s Tricky
 
-Works well:
+**Works well:**
 
-- broad role search
-- iterative narrowing (remote/org/seniority/location)
-- large dataset retrieval with FAISS + DuckDB
+- **Broad role retrieval** — queries like `"remote software engineer"` return relevant results fast (e.g., *Staff Software Engineer, Ads – Quora (Remote)* at 0.86, with signals correctly detecting `remote`).
+- **Iterative multi-turn refinement** — starting with `"software engineer"`, then refining to `"remote only"`, then `"senior level, not management"` progressively narrows the result set; exclusion signals like `not management` are respected via negation parsing.
+- **Seniority + role queries** — `"senior product manager"` returns highly relevant results (0.95+ scores) with `seniority=senior` correctly extracted.
+- **Keyword negation** — `"machine learning engineer but not management"` excludes management-titled results and deprioritizes managerial content (negation penalty applied).
+- **Abbreviation expansion** — queries with `"ml engineer"` or `"ai engineer"` expand to `"machine learning"` / `"artificial intelligence"` via the `ABBREVIATION_EXPANSIONS` map.
+- **Community/health verticals** — `"community health worker"` returns precise title matches (0.87+ scores) from orgs like Advance Community Health, St. Joseph's Health.
+- **Score breakdown transparency** — every result includes `vector_score`, `keyword_score`, `signal_adjustment`, and `rerank_adjustment` so ranking is fully explainable.
 
-Tricky:
+**Tricky:**
 
-- ambiguous mission-driven intent without explicit structured tags
-- sparse or inconsistent location/metadata across listings
+- **Mission-driven intent is inherently ambiguous** — `"social impact jobs at nonprofits"` relies on keyword matching against titles/previews/companies since the dataset has no structured `mission` tag. We expanded to 40+ match terms and 20+ known org patterns (Volunteers of America, Catholic Charities, YMCA, Goodwill, etc.) but edge cases remain.
+- **Location metadata is sparse** — many jobs have empty `location` fields in the dataset. `"data scientist in New York"` correctly parses the location signal but can't filter on it when the field is missing; results fall back to vector relevance.
+- **Confidence is conservative** — the confidence heuristic (`top_score ≥ 0.30` and `spread ≥ 0.03`) can read as `null` for well-distributed result sets, which is intentional (avoids false certainty) but may confuse users.
+- **Multi-turn state is stateless on the server** — context is passed round-trip via JSON, so the client must persist and forward `context` between calls; any dropped context resets refinement state.
 
 ## Why This Meets Evaluation Criteria
 
@@ -216,9 +222,14 @@ Validation artifacts:
 - Search/refine behavior and parsing logic are covered in `tests/test_api.py` and `tests/test_search.py`.
 - Lightweight quality/cost checks are runnable with `python -m app.eval` (writes `data/eval-report.json`).
 
+## Time Spent
+
+Approximately 12–15 hours over multiple sessions. AI tools used during development: GitHub Copilot, ChatGPT.
+
 ## If More Time
 
-- richer query intent parser for mission/company values
-- learned ranker (LTR) with offline eval set
-- advanced explainability per result feature contribution
-- stronger quality filters for stale/low-information postings
+- **Structured mission/industry tags at ingest** — extract `organization_type` and `industry` from `v5_processed_company_data` into DuckDB columns for real faceted filtering (currently we match against free-text only).
+- **Learned ranker (LTR)** — train a lightweight re-ranker on offline relevance judgments instead of hand-tuned signal weights.
+- **LLM-powered intent parsing** — replace regex/heuristic signal extraction with a small LLM call to classify intent slots (role, seniority, exclusions, mission preference) for edge cases.
+- **Location normalization** — geocode raw location strings during ingest to enable proximity-based filtering, addressing the sparse location field problem.
+- **Stronger quality filters** — detect and deprioritize stale, duplicate, or low-information postings at ingest time.
