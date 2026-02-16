@@ -12,17 +12,33 @@ This project uses embeddings only for search relevance and ranking quality.
 
 ## Runtime Token Usage (Measured)
 
-Source: `python -m app.eval` output (`data/eval-report.json`).
+Source: `data/token-metrics.jsonl` — every `/search` and `/refine` call is logged automatically.
 
-- Evaluated queries: 10
-- Total runtime tokens used: 57
-- Mean runtime tokens/query: 5.7
+### Aggregate totals (all sessions through 2026-02-16)
 
-Per-query examples from the latest run:
+| Metric | Value |
+|---|---|
+| Total API calls logged | 118 |
+| `/search` calls | 65 (722 tokens) |
+| `/refine` calls | 53 (901 tokens) |
+| **Total runtime tokens** | **1,623** |
+| **Total estimated cost** | **$0.000032** |
+| Mean tokens/call (non-zero) | 20.8 |
+| Mean tokens/call (all) | 13.8 |
+| Min / Max tokens per call | 2 / 41 |
 
-- "data science jobs" → 3 tokens
+### Per-query examples
+
+- "data science jobs" → 3–5 tokens
 - "senior remote machine learning engineer" → 6 tokens
+- "remote senior ml roles at mission-driven companies" → 35 tokens
 - "neither executive nor vp data roles" → 11 tokens
+- "make it remote" (refine) → 25 tokens
+
+### Notes
+
+- Calls showing `tokens_used = 0` used the cached embedding or keyword-only fallback (no API call made).
+- 78 of 118 calls consumed tokens; 40 were served from cache or keyword-only retrieval.
 
 ## How Runtime Tokens Are Counted
 
@@ -36,10 +52,11 @@ Per-query examples from the latest run:
 ## Budget Check (<= $10 requirement)
 
 - Pricing configured in app: `$0.00002` per 1K tokens.
-- Latest eval run estimated cost: `57 / 1000 * 0.00002 = $0.00000114`.
+- Total runtime cost: `1,623 / 1,000 × $0.00002 = $0.000032`.
 - This is far below the `$10` cap.
 
 ## Ongoing Tracking
 
-- Token and estimated USD cost are persisted and exposed via `GET /metrics/tokens`.
+- Token and estimated USD cost are persisted per call in `data/token-metrics.jsonl`.
+- Aggregated metrics are exposed via `GET /metrics/tokens`.
 - This supports per-endpoint monitoring for `/search` and `/refine`.
